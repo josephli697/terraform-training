@@ -1,51 +1,37 @@
 pipeline {
     agent any
     stages {
-        stage('Clone Repository') {
+        stage('Checkout Repository') {
             steps {
-                git branch: 'main', url: '{your github repo url here}'
+                // Clone the repository to the Jenkins workspace
+                checkout scm
             }
         }
-        stage('Install Terraform') {
+        stage('Init') {
             steps {
-                sh '''
-                wget https://releases.hashicorp.com/terraform/1.5.6/terraform_1.5.6_linux_amd64.zip
-                unzip -o terraform_1.5.6_linux_amd64.zip
-                sudo mv terraform /usr/local/bin/
-                terraform --version
-                '''
-            }
-        }
-        stage('Terraform Init') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'aws_user', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-                    terraform init
-                    '''
+                dir('./') { // Ensure the correct directory is used
+                    withCredentials([usernamePassword(credentialsId: 'aws_user', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh '''
+                        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                        terraform init -reconfigure
+                        '''
+                    }
                 }
             }
         }
-        stage('Terraform Plan') {
+        stage('Destroy') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws_user', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-                    terraform plan
-                    '''
-                }
-            }
-        }
-        stage('Terraform Apply') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'aws_user', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-                    terraform apply -auto-approve
-                    '''
+                dir('./') { // Ensure the correct directory is used
+                    // Manual approval prompt
+                    input message: "Are you sure you want to destroy the resources?", ok: "Yes, Destroy"
+                    withCredentials([usernamePassword(credentialsId: 'aws_user', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh '''
+                        export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+                        export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+                        terraform destroy -auto-approve
+                        '''
+                    }
                 }
             }
         }
